@@ -1,0 +1,14 @@
+I want you to scrape the apple website for the following information:
+
+The top 100 apps in the App Store that are both free and paid.
+
+Please provide the following information for each app:
+1. App Name
+2. App Category
+3. App Subcategory
+4. App Description
+5. App Rating
+6. App Reviews
+7. App Price
+
+I want you to do this for each region of the world. 
