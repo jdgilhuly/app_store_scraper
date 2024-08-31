@@ -23,9 +23,11 @@ def scrape_app_store(driver, region):
 
     apps = []
     for app_type in ['free', 'paid']:
+        logging.info(f"Starting to scrape {app_type} apps")
         # Find the correct section using the href attribute
         href_pattern = f"/charts/iphone/top-{app_type}-apps/"
         try:
+            logging.info(f"Searching for section with href pattern: {href_pattern}")
             section_link = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.XPATH, f"//a[contains(@href, '{href_pattern}')]"))
             )
@@ -38,28 +40,79 @@ def scrape_app_store(driver, region):
         # Scroll the section into view
         driver.execute_script("arguments[0].scrollIntoView();", section)
         time.sleep(2)  # Wait for any dynamic content to load
+        logging.info("Scrolled section into view")
 
         # Find all app items within the section
         app_items = section.find_elements(By.CSS_SELECTOR, "li.l-column")
         logging.info(f"Found {len(app_items)} {app_type} app items")
 
-        for app in app_items[:100]:  # Limit to 100 apps per type
+        for index, app in enumerate(app_items[:2], start=1):  # Limit to 100 apps per type
+            logging.info(f"Processing app {index} of {app_type} apps")
             try:
+                logging.info("Attempting to extract app name")
                 name = app.find_element(By.CSS_SELECTOR, "div.we-lockup__title").text.strip()
+                logging.info(f"Extracted app name: {name}")
+
+                logging.info("Attempting to extract developer name")
                 developer = app.find_element(By.CSS_SELECTOR, "div.we-lockup__subtitle").text.strip()
+                logging.info(f"Extracted developer name: {developer}")
 
                 # Click on the app to open its details
+                logging.info("Attempting to get app link")
                 app_link = app.find_element(By.CSS_SELECTOR, "a.we-lockup").get_attribute('href')
+                logging.info(f"Opening app details page: {app_link}")
                 driver.execute_script(f"window.open('{app_link}', '_blank');")
                 driver.switch_to.window(driver.window_handles[-1])
 
-                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'product-hero__subtitle')))
+                logging.info("Waiting for product description to load")
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'section__description')))
 
-                description = driver.find_element(By.CSS_SELECTOR, 'div.we-truncate.product-hero__subtitle').text.strip()
-                rating = driver.find_element(By.CSS_SELECTOR, 'span.we-customer-ratings__averages__display').text.strip()
-                reviews = driver.find_element(By.CSS_SELECTOR, 'div.we-customer-ratings__count').text.strip().split()[0]
-                price = driver.find_element(By.CSS_SELECTOR, 'li.inline-list__item--bulleted.app-header__list__item--price').text.strip()
-                category = driver.find_element(By.CSS_SELECTOR, 'li.inline-list__item.app-header__list__item--genre').text.strip()
+                logging.info("Extracting app details")
+
+                # Extract description
+                try:
+                    description_element = driver.find_element(By.CSS_SELECTOR, 'div.section__description div.we-truncate')
+                    description = description_element.text.strip()
+                    logging.info(f"Extracted description: {description[:100]}...")  # Log first 100 characters
+                except NoSuchElementException:
+                    description = "N/A"
+                    logging.warning("Description element not found")
+
+                # Extract rating
+                try:
+                    rating_element = driver.find_element(By.CSS_SELECTOR, 'span.we-customer-ratings__averages__display')
+                    rating = rating_element.text.strip()
+                    logging.info(f"Extracted rating: {rating}")
+                except NoSuchElementException:
+                    rating = "N/A"
+                    logging.warning("Rating element not found")
+
+                # Extract reviews count
+                try:
+                    reviews_element = driver.find_element(By.CSS_SELECTOR, 'div.we-customer-ratings__count')
+                    reviews = reviews_element.text.strip().split()[0]
+                    logging.info(f"Extracted reviews count: {reviews}")
+                except NoSuchElementException:
+                    reviews = "N/A"
+                    logging.warning("Reviews count element not found")
+
+                # Extract price
+                try:
+                    price_element = driver.find_element(By.CSS_SELECTOR, 'li.inline-list__item--bulleted.app-header__list__item--price')
+                    price = price_element.text.strip()
+                    logging.info(f"Extracted price: {price}")
+                except NoSuchElementException:
+                    price = "N/A"
+                    logging.warning("Price element not found")
+
+                # Extract category
+                try:
+                    category_element = driver.find_element(By.CSS_SELECTOR, 'li.inline-list__item.app-header__list__item--genre')
+                    category = category_element.text.strip()
+                    logging.info(f"Extracted category: {category}")
+                except NoSuchElementException:
+                    category = "N/A"
+                    logging.warning("Category element not found")
 
                 apps.append({
                     'Name': name,
@@ -72,14 +125,17 @@ def scrape_app_store(driver, region):
                     'Type': app_type,
                     'Developer': developer
                 })
-                logging.info(f"Scraped {app_type} app: {name}")
+                logging.info(f"Successfully scraped {app_type} app: {name}")
 
                 driver.close()
                 driver.switch_to.window(driver.window_handles[0])
             except Exception as e:
-                logging.error(f"Error scraping app: {str(e)}")
+                logging.error(f"Error scraping app {index} of {app_type} apps: {str(e)}")
+                logging.error(f"Current URL: {driver.current_url}")
+                logging.error(f"Page source: {driver.page_source[:500]}...")  # Log first 500 characters of page source
 
             if len(apps) >= 100:
+                logging.info(f"Reached 100 {app_type} apps, moving to next type")
                 break
 
     logging.info(f"Total apps scraped: {len(apps)}")
