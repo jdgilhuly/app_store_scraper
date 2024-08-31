@@ -8,7 +8,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
-
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 logging.basicConfig(level=logging.INFO)
 
 def setup_driver():
@@ -23,37 +23,43 @@ def scrape_app_store(driver, region):
 
     apps = []
     for app_type in ['free', 'paid']:
-        # Click on the appropriate tab
-        tab_selector = f"#charts-{app_type}-tab"
-        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, tab_selector)))
-        driver.find_element(By.CSS_SELECTOR, tab_selector).click()
-        logging.info(f"Clicked on {app_type} apps tab")
+        # Find the correct section using the href attribute
+        href_pattern = f"/charts/iphone/top-{app_type}-apps/"
+        try:
+            section_link = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, f"//a[contains(@href, '{href_pattern}')]"))
+            )
+            section = section_link.find_element(By.XPATH, "./ancestor::section")
+            logging.info(f"Found {app_type} apps section")
+        except TimeoutException:
+            logging.error(f"Timeout waiting for {app_type} apps section")
+            continue
 
-        # Wait for the content to load
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".we-product-collection")))
+        # Scroll the section into view
+        driver.execute_script("arguments[0].scrollIntoView();", section)
+        time.sleep(2)  # Wait for any dynamic content to load
 
-        # Parse the page content
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-        app_items = soup.find_all('div', class_='we-product-collection__item')
+        # Find all app items within the section
+        app_items = section.find_elements(By.CSS_SELECTOR, "li.l-column")
         logging.info(f"Found {len(app_items)} {app_type} app items")
 
         for app in app_items[:100]:  # Limit to 100 apps per type
             try:
-                name = app.find('h3', class_='we-product-collection__item__product-name').text.strip()
-                category = app.find('p', class_='we-product-collection__item__product-category').text.strip()
+                name = app.find_element(By.CSS_SELECTOR, "div.we-lockup__title").text.strip()
+                developer = app.find_element(By.CSS_SELECTOR, "div.we-lockup__subtitle").text.strip()
 
                 # Click on the app to open its details
-                app_link = app.find('a', class_='we-product-collection__item__link')['href']
+                app_link = app.find_element(By.CSS_SELECTOR, "a.we-lockup").get_attribute('href')
                 driver.execute_script(f"window.open('{app_link}', '_blank');")
                 driver.switch_to.window(driver.window_handles[-1])
 
                 WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'product-hero__subtitle')))
-                app_soup = BeautifulSoup(driver.page_source, 'html.parser')
 
-                description = app_soup.find('div', class_='we-truncate product-hero__subtitle').text.strip()
-                rating = app_soup.find('span', class_='we-customer-ratings__averages__display').text.strip()
-                reviews = app_soup.find('div', class_='we-customer-ratings__count').text.strip().split()[0]
-                price = app_soup.find('li', class_='inline-list__item inline-list__item--bulleted app-header__list__item--price').text.strip()
+                description = driver.find_element(By.CSS_SELECTOR, 'div.we-truncate.product-hero__subtitle').text.strip()
+                rating = driver.find_element(By.CSS_SELECTOR, 'span.we-customer-ratings__averages__display').text.strip()
+                reviews = driver.find_element(By.CSS_SELECTOR, 'div.we-customer-ratings__count').text.strip().split()[0]
+                price = driver.find_element(By.CSS_SELECTOR, 'li.inline-list__item--bulleted.app-header__list__item--price').text.strip()
+                category = driver.find_element(By.CSS_SELECTOR, 'li.inline-list__item.app-header__list__item--genre').text.strip()
 
                 apps.append({
                     'Name': name,
@@ -63,7 +69,8 @@ def scrape_app_store(driver, region):
                     'Rating': rating,
                     'Reviews': reviews,
                     'Price': price,
-                    'Type': app_type
+                    'Type': app_type,
+                    'Developer': developer
                 })
                 logging.info(f"Scraped {app_type} app: {name}")
 
@@ -82,14 +89,14 @@ def save_to_csv(apps, filename):
     os.makedirs('results', exist_ok=True)
     filepath = os.path.join('results', filename)
     with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['Name', 'Category', 'Subcategory', 'Description', 'Rating', 'Reviews', 'Price', 'Type']
+        fieldnames = ['Name', 'Category', 'Subcategory', 'Description', 'Rating', 'Reviews', 'Price', 'Type', 'Developer']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for app in apps:
             writer.writerow(app)
 
 def main():
-    regions = ['us', 'gb', 'jp', 'kr', 'cn', 'de', 'fr', 'es', 'it', 'ru']
+    regions = ['us']  # For testing, we'll just use the US region
     driver = setup_driver()
 
     try:
