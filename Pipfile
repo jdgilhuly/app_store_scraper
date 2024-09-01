@@ -8,6 +8,8 @@ requests = "*"
 beautifulsoup4 = "*"
 selenium = "*"
 openai = "*"
+aiohttp = "*"
+
 
 [dev-packages]
 
