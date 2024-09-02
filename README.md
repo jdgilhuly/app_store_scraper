@@ -1,6 +1,6 @@
 # App Store Scraper
 
-This project scrapes the Apple App Store for the top 100 free and paid apps across different regions.
+This project scrapes the Apple App Store for the top 100 free and paid apps and games across different regions.
 
 ## Setup
 
@@ -34,33 +34,27 @@ This project scrapes the Apple App Store for the top 100 free and paid apps acro
    python app_store_scraper.py
    ```
 
-3. The script will create CSV files for each region and app type (free/paid) in the current directory.
+3. The script will create CSV files for each region and app category in a date-stamped results directory.
 
 ## What app_store_scraper.py Does
 
 The `app_store_scraper.py` script performs the following tasks:
 
-1. It defines a list of regions to scrape (e.g., US, UK, CA, AU).
-2. For each region, it scrapes both the top free and top paid apps.
-3. The script uses web scraping techniques to extract information from the App Store pages.
+1. It defines a list of regions to scrape (e.g., US, GB, JP, KR, CN, etc.).
+2. The script uses Selenium WebDriver to navigate and extract information from the App Store pages.
+3. For each region, it scrapes four categories: free apps, paid apps, free games, and paid games.
 4. For each app, it collects data such as:
    - App name
-   - Developer name
-   - App category
-   - Rating
-   - Number of ratings
-   - Current version
-   - Last update date
-   - App size
-   - Age rating
-5. The script continues scraping until it has collected data for the top 100 apps in each category (free and paid) for each region.
-6. As it scrapes, it saves the data to CSV files, creating separate files for each region and app type (e.g., US_free_apps.csv, UK_paid_apps.csv).
-7. The script includes error handling and rate limiting to respect the App Store's servers and handle potential issues during scraping.
+   - App type (free/paid)
+   - Rank
+5. The script continues scraping until it has collected data for the top 100 apps in each category for each region.
+6. As it scrapes, it saves the data to CSV files, creating separate files for each region and category (e.g., results_20230515/us/app_store_top_100_free_apps.csv).
+7. The script includes error handling and logging to track the scraping process and handle potential issues.
 
 ## Customization
 
 - To modify the regions being scraped, edit the `regions` list in the `main()` function of `app_store_scraper.py`.
-- To change the number of apps scraped, modify the condition `if len(apps) >= 100:` in the `scrape_app_store()` function.
+- To change the number of apps scraped, modify the slice `app_items[:100]` in the `scrape_app_store()` function.
 
 ## Note
 
