@@ -26,55 +26,54 @@ def scrape_app_store(driver, region):
     driver.get(url)
     logger.info(f"Navigated to {url}")
 
-    apps = []
-
-    sections = [
-        ("Top Free Apps", 'a.section__headline-link[href*="/top-free/"]'),
-        ("Top Paid Apps", 'a.section__headline-link[href*="/top-paid/"]'),
-        ("Top Free Games", 'a.section__headline-link[href*="/top-free-games/"]')
-    ]
 
 
     # Wait for 5 seconds
     time.sleep(5)
 
-    # Try to click on the charts link
+    links = driver.find_elements(By.XPATH, "//a[contains(@class, 'section__headline-link')]")
 
-    try:
-        charts_link = driver.find_element(By.CSS_SELECTOR, 'a.section__headline-link')
-        charts_link.click()
-        logger.info("Clicked on charts link")
-    except NoSuchElementException:
-        logger.error("Could not find charts link")
-        ensure_directory("errors")
-        driver.save_screenshot(f"errors/error_{region}_no_charts_link.png")
-        return apps
+    sections = [
+        ("Top Free Apps", 'free', links[0]),
+        ("Top Paid Apps", 'paid', links[1]),
+        ("Top Free Games", 'free', links[2]),
+        ("Top Paid Games", 'paid', links[3]),
+    ]
 
-    # Wait for the charts page to load
-    time.sleep(5)
 
-    # Find all app items
-    app_items = driver.find_elements(By.CSS_SELECTOR, ".we-lockup")
-    logger.info(f"Found {len(app_items)} app items")
-
-    for app in app_items[:100]:
+    for name, type, selector in sections:
         try:
-            rank = app.find_element(By.CSS_SELECTOR, ".we-lockup__rank").text
-            name = app.find_element(By.CSS_SELECTOR, ".we-lockup__title .we-clamp").text
+            apps = []
+            selector.click()
+            logger.info(f"Clicked on {name} link")
 
-            apps.append({'name': name, 'rank': int(rank)})
-            logger.info(f"Scraped app: {name} - Rank: {rank}")
+            app_items = driver.find_elements(By.CSS_SELECTOR, ".we-lockup")
+            logger.info(f"Found {len(app_items)} app items")
+
+            for app in app_items[:100]:
+                try:
+                    rank = app.find_element(By.CSS_SELECTOR, ".we-lockup__rank").text
+                    name = app.find_element(By.CSS_SELECTOR, ".we-lockup__title .we-clamp").text
+                    apps.append({'name': name, 'type': type, 'rank': int(rank)})
+                    logger.info(f"Scraped app: {name} - Rank: {rank} - Type: {type}")
+                except NoSuchElementException:
+                    logger.warning(f"Failed to scrape an app")
+                except ValueError:
+                    logger.warning(f"Failed to parse rank for app: {name}")
+
+            save_to_csv(apps, region, type)
+            driver.back()
+            time.sleep(5)
+
         except NoSuchElementException:
-            logger.warning(f"Failed to scrape an app")
-        except ValueError:
-            logger.warning(f"Failed to parse rank for app: {name}")
-
-    return apps
+            logger.error(f"Could not find {name} link")
+            break
 
 
-def save_to_csv(apps, region):
+
+def save_to_csv(apps, region, type):
     ensure_directory("results")
-    filename = f"results/app_store_top_100_{region}.csv"
+    filename = f"results/app_store_top_100_{region}_{type}.csv"
     with open(filename, 'w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=['name', 'type', 'rank'])
         writer.writeheader()
@@ -89,7 +88,6 @@ def main():
         for region in regions:
             logger.info(f"Scraping apps for region: {region}")
             apps = scrape_app_store(driver, region)
-            save_to_csv(apps, region)
     finally:
         driver.quit()
 
