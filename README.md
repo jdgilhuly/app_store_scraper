@@ -31,7 +31,7 @@ This project scrapes the Apple App Store for the top 100 free and paid apps and 
 
 2. Run the scraper:
    ```shell
-   python app_store_scraper.py
+   python src/app_store_scraper.py
    ```
 
 3. The script will create CSV files for each region and app category in a date-stamped results directory.
