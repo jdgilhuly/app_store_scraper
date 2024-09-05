@@ -67,14 +67,59 @@ def print_ranking_changes(daily_changes, region, app_type):
 
         print("\n" + "-"*50 + "\n")
 
+def calculate_global_score(app_data, regions):
+    total_score = 0
+    valid_regions = 0
+    for region in regions:
+        if region in app_data and app_data[region] is not None:
+            total_score += 101 - app_data[region]  # Invert rank so higher is better
+            valid_regions += 1
+
+    # Return average score only if the app has rankings in at least one region
+    return total_score / valid_regions if valid_regions > 0 else 0
+
+def get_global_rankings(data, regions, date, top_n=10):
+    global_scores = defaultdict(dict)
+
+    for region in regions:
+        if region in data and date in data[region]:
+            df = data[region][date]
+            for app, row in df.iterrows():
+                if app not in global_scores:
+                    global_scores[app] = {r: None for r in regions}
+                global_scores[app][region] = row['rank']
+
+    app_scores = [(app, calculate_global_score(scores, regions)) for app, scores in global_scores.items()]
+    app_scores.sort(key=lambda x: x[1], reverse=True)
+
+    return app_scores[:top_n]
+
+def print_global_rankings(global_rankings, date):
+    print(f"\nGlobal Rankings for {date}:")
+    for rank, (app, score) in enumerate(global_rankings, 1):
+        print(f"{rank}. {app}: {score:.2f}")
+    print("\n" + "-"*50 + "\n")
+
 def main():
     regions = ['us', 'gb', 'jp', 'kr', 'cn', 'hk', 'tw', 'th', 'sg', 'my', 'ph', 'id', 'in', 'ru']
     app_types = ['free_apps', 'paid_apps', 'free_games', 'paid_games']
 
-    for region in regions:
-        for app_type in app_types:
-            print(f"Analyzing {region} {app_type}...")
-            data = load_csv_files(region, app_type)
+    for app_type in app_types:
+        print(f"\nAnalyzing global rankings for {app_type}...")
+        global_data = {region: load_csv_files(region, app_type) for region in regions}
+
+        all_dates = set()
+        for region_data in global_data.values():
+            all_dates.update(region_data.keys())
+        all_dates = sorted(all_dates)
+
+        for date in all_dates:
+            global_rankings = get_global_rankings(global_data, regions, date)
+            print_global_rankings(global_rankings, date)
+
+        for region in regions:
+            print(f"\nAnalyzing {region} {app_type}...")
+            data = global_data[region]
             if data:
                 ranking_changes, dates = analyze_ranking_changes(data)
                 daily_changes = get_top_movers(ranking_changes, dates)
