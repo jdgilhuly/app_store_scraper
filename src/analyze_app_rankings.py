@@ -1,7 +1,6 @@
 import os
 import pandas as pd
-import matplotlib.pyplot as plt
-from datetime import datetime
+from collections import defaultdict
 
 def load_csv_files(region, app_type):
     data = {}
@@ -17,72 +16,56 @@ def load_csv_files(region, app_type):
 
     return data
 
-def analyze_ranking_changes(data, top_n=10):
+def analyze_ranking_changes(data):
     all_apps = set()
     for df in data.values():
         all_apps.update(df.index)
 
-    ranking_changes = {app: [] for app in all_apps}
+    ranking_changes = defaultdict(lambda: defaultdict(lambda: None))
     dates = sorted(data.keys())
 
     for date in dates:
         df = data[date]
         for app in all_apps:
-            rank = df.loc[app]['rank'] if app in df.index else None
-            ranking_changes[app].append(rank)
+            if app in df.index:
+                ranking_changes[app][date] = df.loc[app]['rank']
 
-    # Sort apps by their average rank (excluding None values)
-    top_apps = sorted(ranking_changes.items(),
-                      key=lambda x: sum(r for r in x[1] if r is not None) / len([r for r in x[1] if r is not None]))[:top_n]
+    return ranking_changes, dates
 
-    return top_apps, dates
+def get_top_movers(ranking_changes, dates, top_n=5):
+    daily_changes = []
 
-def plot_ranking_changes(top_apps, dates, region, app_type):
-    plt.figure(figsize=(12, 8))
-    for app, ranks in top_apps:
-        plt.plot(dates, ranks, marker='o', label=app)
+    for i in range(1, len(dates)):
+        prev_date, curr_date = dates[i-1], dates[i]
+        changes = []
 
-    plt.gca().invert_yaxis()  # Invert y-axis so that rank 1 is at the top
-    plt.xlabel('Date')
-    plt.ylabel('Rank')
-    plt.title(f'Top {len(top_apps)} App Ranking Changes - {region.upper()} {app_type.capitalize()}')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
+        for app, ranks in ranking_changes.items():
+            prev_rank, curr_rank = ranks[prev_date], ranks[curr_date]
+            if prev_rank is not None and curr_rank is not None:
+                change = prev_rank - curr_rank
+                changes.append((app, change, prev_rank, curr_rank))
 
-    # Save the plot
-    plot_dir = 'ranking_plots'
-    os.makedirs(plot_dir, exist_ok=True)
-    plt.savefig(f'{plot_dir}/ranking_changes_{region}_{app_type}.png')
-    plt.close()
+        changes.sort(key=lambda x: abs(x[1]), reverse=True)
+        daily_changes.append((prev_date, curr_date, changes[:top_n], changes[-top_n:][::-1]))
 
-def analyze_category_distribution(data):
-    category_distribution = {}
-    for date, df in data.items():
-        category_counts = df['type'].value_counts().to_dict()
-        category_distribution[date] = category_counts
-    return category_distribution
+    return daily_changes
 
-def plot_category_distribution(category_distribution, region, app_type):
-    dates = sorted(category_distribution.keys())
-    categories = set()
-    for date_data in category_distribution.values():
-        categories.update(date_data.keys())
+def print_ranking_changes(daily_changes, region, app_type):
+    print(f"\nRanking Changes for {region.upper()} {app_type.capitalize()}:")
+    print(f"\nDate range: {daily_changes[0][0]} to {daily_changes[-1][1]}\n")
 
-    plt.figure(figsize=(12, 8))
-    for category in categories:
-        values = [category_distribution[date].get(category, 0) for date in dates]
-        plt.plot(dates, values, marker='o', label=category)
+    for prev_date, curr_date, top_risers, top_fallers in daily_changes:
+        print(f"Changes from {prev_date} to {curr_date}:")
 
-    plt.xlabel('Date')
-    plt.ylabel('Number of Apps')
-    plt.title(f'Category Distribution Over Time - {region.upper()} {app_type.capitalize()}')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
+        print("\nTop Risers:")
+        for app, change, prev_rank, curr_rank in top_risers:
+            print(f"  {app}: +{change} (from {prev_rank} to {curr_rank})")
 
-    plot_dir = 'category_plots'
-    os.makedirs(plot_dir, exist_ok=True)
-    plt.savefig(f'{plot_dir}/category_distribution_{region}_{app_type}.png')
-    plt.close()
+        print("\nTop Fallers:")
+        for app, change, prev_rank, curr_rank in top_fallers:
+            print(f"  {app}: {change} (from {prev_rank} to {curr_rank})")
+
+        print("\n" + "-"*50 + "\n")
 
 def main():
     regions = ['us', 'gb', 'jp', 'kr', 'cn', 'hk', 'tw', 'th', 'sg', 'my', 'ph', 'id', 'in', 'ru']
@@ -93,13 +76,9 @@ def main():
             print(f"Analyzing {region} {app_type}...")
             data = load_csv_files(region, app_type)
             if data:
-                top_apps, dates = analyze_ranking_changes(data)
-                plot_ranking_changes(top_apps, dates, region, app_type)
-                print(f"Ranking plot saved for {region} {app_type}")
-
-                category_distribution = analyze_category_distribution(data)
-                plot_category_distribution(category_distribution, region, app_type)
-                print(f"Category distribution plot saved for {region} {app_type}")
+                ranking_changes, dates = analyze_ranking_changes(data)
+                daily_changes = get_top_movers(ranking_changes, dates)
+                print_ranking_changes(daily_changes, region, app_type)
             else:
                 print(f"No data found for {region} {app_type}")
 
