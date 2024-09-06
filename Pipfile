@@ -9,7 +9,9 @@ beautifulsoup4 = "*"
 selenium = "*"
 openai = "*"
 aiohttp = "*"
-
+pandas = "*"
+datetime = "*"
+matplotlib = "*"
 
 [dev-packages]
 
